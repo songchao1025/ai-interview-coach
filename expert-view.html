@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>智问助手 - 面试指南</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .header-card { background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; }
+        .candidate-name { font-size: 1.5em; font-weight: bold; }
+        .info-box { background: rgba(255,255,255,0.15); padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .info-box p { margin: 5px 0; font-size: 0.9em; }
+        .dimension-card { background: white; border-radius: 12px; margin-bottom: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .dimension-header { padding: 15px; background: #f8f9fa; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .dimension-header h3 { margin: 0; color: #1a73e8; }
+        .dimension-content { display: none; padding: 15px; }
+        .dimension-content.show { display: block; }
+        .question-block { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px dashed #eee; }
+        .question-text { font-weight: bold; margin-bottom: 10px; }
+        .followup-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+        .followup-btn { background: #e8f0fe; color: #1a73e8; border: none; padding: 8px 14px; border-radius: 20px; font-size: 0.85em; cursor: pointer; }
+        .followup-content { display: none; margin-top: 10px; padding: 10px; background: #f0f7ff; border-radius: 8px; }
+        .followup-content.show { display: block; }
+        .candidate-list-item { background: white; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .candidate-list-item:hover { background: #f0f7ff; }
+        .back-btn { background: none; border: none; color: #1a73e8; font-size: 1em; cursor: pointer; margin-bottom: 15px; }
+        .custom-section { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; }
+        .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+        .tag-btn { background: #fff; border: 1px solid #1a73e8; color: #1a73e8; padding: 6px 14px; border-radius: 20px; font-size: 0.85em; cursor: pointer; }
+        .tag-btn.active { background: #1a73e8; color: white; }
+        .custom-input-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .custom-input-row input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+        .custom-result { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #1a73e8; }
+        .no-data { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container" id="app"></div>
+
+    <script src="config.js"></script>
+    <script>
+        (function() {
+            const app = document.getElementById('app');
+            let candidates = [];
+
+            // 加载候选人列表
+            function loadCandidates() {
+                const stored = localStorage.getItem('candidatesList');
+                if (stored) {
+                    try { candidates = JSON.parse(stored); } catch(e) { candidates = []; }
+                }
+            }
+
+            // 渲染候选人列表页
+            function renderList() {
+                if (candidates.length === 0) {
+                    app.innerHTML = '<div class="no-data">📭 暂无面试安排，请联系HR准备。</div>';
+                    return;
+                }
+                let html = '<h2 style="color:#1a73e8; margin-top:0;">📋 候选人列表</h2>';
+                candidates.forEach((c, i) => {
+                    html += `
+                    <div class="candidate-list-item" data-index="${i}">
+                        <div>
+                            <strong>${c.name}</strong>
+                            <div style="font-size:0.85em; color:#666;">${c.jobTitle} | ${c.workYears || ''}</div>
+                        </div>
+                        <span style="color:#1a73e8;">▶</span>
+                    </div>`;
+                });
+                app.innerHTML = html;
+                document.querySelectorAll('.candidate-list-item').forEach(item => {
+                    item.addEventListener('click', () => showCandidateDetail(item.dataset.index));
+                });
+            }
+
+            // 渲染单个候选人详情
+            function showCandidateDetail(index) {
+                const c = candidates[index];
+                let html = `
+                    <button class="back-btn" id="backBtn">← 返回列表</button>
+                    <div class="header-card">
+                        <div class="candidate-name">${c.name}</div>
+                        <div style="opacity:0.8;">${c.jobTitle} 面试指南</div>
+                        <div class="info-box">
+                            <p><strong>✨ 亮点：</strong>${c.highlights}</p>
+                            <p><strong>🔍 关注点：</strong>${c.concerns}</p>
+                        </div>
+                    </div>
+                `;
+                c.questions.forEach((dim, dIdx) => {
+                    html += `
+                    <div class="dimension-card">
+                        <div class="dimension-header" data-dim="${dIdx}">
+                            <h3>${dim.dimension}</h3>
+                            <span>▶</span>
+                        </div>
+                        <div class="dimension-content" id="dim-${dIdx}">
+                    `;
+                    dim.items.forEach((item, qIdx) => {
+                        html += `
+                        <div class="question-block">
+                            <div class="question-text">Q${qIdx+1}: ${item.question}</div>
+                            <div class="followup-buttons">
+                        `;
+                        item.followUps.forEach((fu, fIdx) => {
+                            html += `
+                                <button class="followup-btn" data-d="${dIdx}" data-q="${qIdx}" data-f="${fIdx}">${fu}</button>
+                                <div class="followup-content" id="fu-${dIdx}-${qIdx}-${fIdx}"></div>
+                            `;
+                        });
+                        html += `</div></div>`;
+                    });
+                    html += `</div></div>`;
+                });
+
+                // 自主追问区域
+                html += `
+                <div class="custom-section">
+                    <h3>💡 专家自主追问</h3>
+                    <p style="font-size:0.85em; color:#666;">基于候选人简历的即时提问</p>
+                    <div class="tag-cloud">
+                        <button class="tag-btn" data-tag="抗压能力">抗压能力</button>
+                        <button class="tag-btn" data-tag="学习能力">学习能力</button>
+                        <button class="tag-btn" data-tag="领导力">领导力</button>
+                        <button class="tag-btn" data-tag="职业规划">职业规划</button>
+                        <button class="tag-btn" data-tag="价值观匹配">价值观匹配</button>
+                        <button class="tag-btn" data-tag="沟通表达">沟通表达</button>
+                    </div>
+                    <div class="custom-input-row">
+                        <input type="text" id="customTagInput" placeholder="输入维度，如：创新思维">
+                        <button id="customTagBtn">生成</button>
+                    </div>
+                    <div id="customResult" class="custom-result" style="display:none;"></div>
+                </div>
+                `;
+
+                app.innerHTML = html;
+                bindDetailEvents(c, index);
+            }
+
+            function bindDetailEvents(candidate, index) {
+                // 返回列表
+                document.getElementById('backBtn').addEventListener('click', renderList);
+
+                // 折叠维度
+                document.querySelectorAll('.dimension-header').forEach(header => {
+                    header.addEventListener('click', function() {
+                        const dIdx = this.dataset.dim;
+                        const content = document.getElementById(`dim-${dIdx}`);
+                        const icon = this.querySelector('span');
+                        if (content.classList.contains('show')) {
+                            content.classList.remove('show');
+                            icon.textContent = '▶';
+                        } else {
+                            content.classList.add('show');
+                            icon.textContent = '▼';
+                        }
+                    });
+                });
+
+                // 追问按钮
+                const followTexts = {
+                    '追问技术细节': '能更深入解释技术/算法吗？',
+                    '追问团队协作': '你在团队中的具体角色？如何分工？',
+                    '追问失败处理': '过程中最大的挫折？如何调整？',
+                    '追问细节': '当时的情境、任务、行动、结果？',
+                    '追问思考过程': '决策依据是什么？还有哪些选项？',
+                    '追问量化结果': '可量化的成果？比如效率提升？',
+                };
+                document.querySelectorAll('.followup-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const d = this.dataset.d, q = this.dataset.q, f = this.dataset.f;
+                        const block = document.getElementById(`fu-${d}-${q}-${f}`);
+                        if (!block) return;
+                        let key = this.textContent.trim();
+                        if (key.includes('：')) key = key.split('：')[0];
+                        block.textContent = followTexts[key] || `针对“${key}”深入追问...`;
+                        block.classList.toggle('show');
+                    });
+                });
+
+                // 默认展开第一个维度
+                const firstHeader = document.querySelector('.dimension-header');
+                if (firstHeader) firstHeader.click();
+
+                // 自主追问AI调用
+                const customResult = document.getElementById('customResult');
+                async function fetchCustom(dimension) {
+                    customResult.style.display = 'block';
+                    customResult.innerHTML = '⏳ 生成中...';
+                    const info = `
+姓名：${candidate.name}，岗位：${candidate.jobTitle}
+工作年限：${candidate.workYears || '未知'}
+技能：${candidate.skills || '未知'}
+项目：${candidate.project || '未知'}
+教育：${candidate.education || '未知'}
+课程：${candidate.courses || '未知'}
+获奖：${candidate.awards || '未知'}
+论文专利：${candidate.papers || '未知'}
+兴趣爱好：${candidate.hobbies || '未知'}
+自我评价：${candidate.selfEval || '未知'}`;
+                    try {
+                        const resp = await fetch(API_CONFIG.baseURL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_CONFIG.apiKey}` },
+                            body: JSON.stringify({
+                                model: API_CONFIG.model,
+                                messages: [
+                                    { role: 'system', content: '你是面试官，输出合法JSON：{"questions":[{"question":"...","followUps":["..."]}]}' },
+                                    { role: 'user', content: `候选人信息：\n${info}\n\n请针对“${dimension}”维度生成2-3个面试问题及追问。` }
+                                ],
+                                temperature: 0.7, max_tokens: 800
+                            })
+                        });
+                        const data = await resp.json();
+                        let content = data.choices[0].message.content;
+                        let clean = content.trim();
+                        const m = clean.match(/```json\s*([\s\S]*?)\s*```/) || clean.match(/```\s*([\s\S]*?)\s*```/);
+                        if (m) clean = m[1];
+                        else { const a=clean.indexOf('{'), b=clean.lastIndexOf('}'); if(a!==-1) clean=clean.substring(a,b+1); }
+                        const result = JSON.parse(clean);
+                        let html = `<h4>考察维度：${dimension}</h4>`;
+                        result.questions.forEach((q,i) => {
+                            html += `<p><strong>Q${i+1}:</strong> ${q.question}<br><small>追问：${q.followUps.join('、')}</small></p>`;
+                        });
+                        customResult.innerHTML = html;
+                    } catch(e) {
+                        customResult.innerHTML = '❌ 生成失败';
+                        console.error(e);
+                    }
+                }
+
+                document.querySelectorAll('.tag-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        fetchCustom(this.dataset.tag);
+                    });
+                });
+                document.getElementById('customTagBtn').addEventListener('click', () => {
+                    const val = document.getElementById('customTagInput').value.trim();
+                    if (!val) return alert('请输入维度');
+                    fetchCustom(val);
+                });
+            }
+
+            // 启动
+            loadCandidates();
+            renderList();
+        })();
+    </script>
+</body>
+</html>

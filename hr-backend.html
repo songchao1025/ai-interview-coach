@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智问助手 - HR管理后台</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; }
+        h1 { color: #1a73e8; }
+        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .section h2 { margin-top: 0; color: #555; font-size: 1.2em; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+        textarea { resize: vertical; height: 80px; }
+        .dimension-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .dimension-row input { flex: 1; margin-bottom: 0; }
+        button { background: #1a73e8; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #1557b0; }
+        .btn-secondary { background: #34a853; }
+        .btn-secondary:hover { background: #2d9249; }
+        .btn-danger { background: #ea4335; }
+        .btn-danger:hover { background: #d33426; }
+        .btn-outline { background: white; color: #1a73e8; border: 1px solid #1a73e8; }
+        .btn-outline:hover { background: #e8f0fe; }
+        .candidate-list { margin-top: 15px; }
+        .candidate-item { background: #f8f9fa; padding: 10px 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .candidate-info h4 { margin: 0 0 5px 0; }
+        .candidate-info p { margin: 0; font-size: 0.85em; color: #666; }
+        .candidate-actions button { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 智问助手 - HR管理后台</h1>
+            <button id="openExpertViewBtn" class="btn-outline" style="margin-top:10px;">👁️ 打开专家视图（新标签页）</button>
+        </div>
+
+        <!-- 岗位管理 -->
+        <div class="section">
+            <h2>📌 岗位设定</h2>
+            <label for="jobSelect">选择已有岗位（或新建）</label>
+            <select id="jobSelect"><option value="">-- 新建岗位 --</option></select>
+            <label for="jobTitle">岗位名称</label>
+            <input type="text" id="jobTitle" placeholder="例如：高级光学工程师">
+            <label>核心考察维度（至少1个，最多3个）</label>
+            <div id="dimensionsContainer">
+                <div class="dimension-row"><input type="text" class="dimension" placeholder="维度1"></div>
+                <div class="dimension-row"><input type="text" class="dimension" placeholder="维度2"></div>
+                <div class="dimension-row"><input type="text" class="dimension" placeholder="维度3"></div>
+            </div>
+            <button id="saveJobBtn">💾 保存岗位</button>
+        </div>
+
+        <!-- 候选人录入 -->
+        <div class="section">
+            <h2>👤 候选人信息录入</h2>
+            <label for="candidateName">姓名</label>
+            <input type="text" id="candidateName" placeholder="例如：张三">
+            <label for="workYears">工作年限</label>
+            <input type="text" id="workYears" placeholder="例如：5年">
+            <label for="skills">核心技能（逗号分隔）</label>
+            <input type="text" id="skills" placeholder="例如：Zemax, Python">
+            <label for="projectExperience">最近项目经历</label>
+            <textarea id="projectExperience" placeholder="复制简历项目描述"></textarea>
+            <label for="education">教育背景</label>
+            <input type="text" id="education" placeholder="例如：清华大学 硕士">
+            <label for="courses">专业技术课程</label>
+            <textarea id="courses" placeholder="例如：高等光学、激光原理"></textarea>
+            <label for="awards">获奖及专业资格</label>
+            <textarea id="awards" placeholder="例如：PMP认证、全国竞赛一等奖"></textarea>
+            <label for="papers">论文及专利</label>
+            <textarea id="papers" placeholder="例如：发表SCI论文2篇"></textarea>
+            <label for="hobbies">兴趣爱好</label>
+            <input type="text" id="hobbies" placeholder="例如：马拉松、围棋">
+            <label for="selfEvaluation">自我评价</label>
+            <textarea id="selfEvaluation" placeholder="复制自我评价"></textarea>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button id="generateAndSaveBtn">✨ 生成面试问题并保存</button>
+                <button id="clearFormBtn" class="btn-secondary">清空表单</button>
+            </div>
+        </div>
+
+        <!-- 已保存候选人列表 -->
+        <div class="section">
+            <h2>📋 已保存候选人</h2>
+            <div id="candidateListContainer" class="candidate-list">
+                <p style="color:#999;">暂无候选人，请录入并生成。</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // ---------- 数据存储 ----------
+        let jobList = JSON.parse(localStorage.getItem('jobList') || '[]');
+        let candidates = JSON.parse(localStorage.getItem('candidatesList') || '[]');
+
+        // ---------- DOM ----------
+        const jobSelect = document.getElementById('jobSelect');
+        const jobTitleInput = document.getElementById('jobTitle');
+        const dimensionInputs = document.querySelectorAll('.dimension');
+        const saveJobBtn = document.getElementById('saveJobBtn');
+        const generateAndSaveBtn = document.getElementById('generateAndSaveBtn');
+        const clearFormBtn = document.getElementById('clearFormBtn');
+        const openExpertViewBtn = document.getElementById('openExpertViewBtn');
+        
+        const fields = {
+            name: document.getElementById('candidateName'),
+            workYears: document.getElementById('workYears'),
+            skills: document.getElementById('skills'),
+            project: document.getElementById('projectExperience'),
+            education: document.getElementById('education'),
+            courses: document.getElementById('courses'),
+            awards: document.getElementById('awards'),
+            papers: document.getElementById('papers'),
+            hobbies: document.getElementById('hobbies'),
+            selfEval: document.getElementById('selfEvaluation')
+        };
+
+        // ---------- 岗位管理 ----------
+        function refreshJobSelect() {
+            jobSelect.innerHTML = '<option value="">-- 新建岗位 --</option>';
+            jobList.forEach((job, index) => {
+                const opt = document.createElement('option');
+                opt.value = index;
+                opt.textContent = job.title;
+                jobSelect.appendChild(opt);
+            });
+        }
+        jobSelect.addEventListener('change', function() {
+            const idx = this.value;
+            if (idx === '') {
+                jobTitleInput.value = '';
+                dimensionInputs.forEach(inp => inp.value = '');
+            } else {
+                const job = jobList[idx];
+                jobTitleInput.value = job.title;
+                job.dimensions.forEach((d, i) => { if (dimensionInputs[i]) dimensionInputs[i].value = d; });
+                for (let i = job.dimensions.length; i < dimensionInputs.length; i++) dimensionInputs[i].value = '';
+            }
+        });
+        saveJobBtn.addEventListener('click', () => {
+            const title = jobTitleInput.value.trim();
+            if (!title) return alert('请输入岗位名称');
+            const dims = [];
+            dimensionInputs.forEach(inp => { const v = inp.value.trim(); if (v) dims.push(v); });
+            if (dims.length === 0) return alert('请至少填写一个维度');
+            const idx = jobSelect.value;
+            const newJob = { title, dimensions: dims };
+            if (idx === '') jobList.push(newJob);
+            else jobList[idx] = newJob;
+            localStorage.setItem('jobList', JSON.stringify(jobList));
+            refreshJobSelect();
+            alert('✅ 岗位保存成功');
+        });
+
+        // ---------- 候选人列表渲染 ----------
+        function renderCandidateList() {
+            const container = document.getElementById('candidateListContainer');
+            if (candidates.length === 0) {
+                container.innerHTML = '<p style="color:#999;">暂无候选人。</p>';
+                return;
+            }
+            let html = '';
+            candidates.forEach((c, idx) => {
+                html += `
+                <div class="candidate-item">
+                    <div class="candidate-info">
+                        <h4>${c.name}</h4>
+                        <p>${c.jobTitle} | ${c.workYears || '未知'} | ${new Date(c.timestamp).toLocaleString()}</p>
+                    </div>
+                    <div class="candidate-actions">
+                        <button class="btn-secondary" data-idx="${idx}" data-action="edit">✏️ 编辑</button>
+                        <button class="btn-danger" data-idx="${idx}" data-action="delete">🗑️ 删除</button>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+            container.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+                btn.addEventListener('click', () => editCandidate(btn.dataset.idx));
+            });
+            container.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+                btn.addEventListener('click', () => deleteCandidate(btn.dataset.idx));
+            });
+        }
+
+        function editCandidate(idx) {
+            const c = candidates[idx];
+            fields.name.value = c.name || '';
+            fields.workYears.value = c.workYears || '';
+            fields.skills.value = c.skills || '';
+            fields.project.value = c.project || '';
+            fields.education.value = c.education || '';
+            fields.courses.value = c.courses || '';
+            fields.awards.value = c.awards || '';
+            fields.papers.value = c.papers || '';
+            fields.hobbies.value = c.hobbies || '';
+            fields.selfEval.value = c.selfEval || '';
+            const jobIdx = jobList.findIndex(j => j.title === c.jobTitle);
+            if (jobIdx !== -1) jobSelect.value = jobIdx;
+            else jobSelect.value = '';
+            if (c.jobDimensions) {
+                c.jobDimensions.forEach((d, i) => { if (dimensionInputs[i]) dimensionInputs[i].value = d; });
+            }
+            generateAndSaveBtn.dataset.editIdx = idx;
+            generateAndSaveBtn.textContent = '✏️ 更新面试问题';
+        }
+
+        function deleteCandidate(idx) {
+            if (!confirm('确定删除该候选人的所有数据吗？')) return;
+            candidates.splice(idx, 1);
+            localStorage.setItem('candidatesList', JSON.stringify(candidates));
+            renderCandidateList();
+        }
+
+        // ---------- 生成并保存 ----------
+        generateAndSaveBtn.addEventListener('click', async () => {
+            const name = fields.name.value.trim();
+            if (!name) return alert('请输入姓名');
+            const selectedJobIdx = jobSelect.value;
+            if (selectedJobIdx === '') return alert('请先选择一个岗位');
+            const job = jobList[selectedJobIdx];
+            if (!job.dimensions || job.dimensions.length === 0) return alert('所选岗位没有维度');
+
+            const candidate = {
+                name,
+                workYears: fields.workYears.value.trim(),
+                skills: fields.skills.value.trim(),
+                project: fields.project.value.trim(),
+                education: fields.education.value.trim(),
+                courses: fields.courses.value.trim(),
+                awards: fields.awards.value.trim(),
+                papers: fields.papers.value.trim(),
+                hobbies: fields.hobbies.value.trim(),
+                selfEval: fields.selfEval.value.trim(),
+                jobTitle: job.title,
+                jobDimensions: job.dimensions
+            };
+
+            const dimsText = job.dimensions.map(d => `《${d}》`).join('、');
+            const prompt = `你是一位资深面试专家。根据以下岗位和候选人信息生成面试问题指南。
+
+【岗位】${job.title}
+【考察维度】${dimsText}
+【候选人】
+姓名：${candidate.name}
+工作年限：${candidate.workYears || '未提供'}
+技能：${candidate.skills || '未提供'}
+项目经历：${candidate.project || '未提供'}
+教育：${candidate.education || '未提供'}
+课程：${candidate.courses || '未提供'}
+获奖资格：${candidate.awards || '未提供'}
+论文专利：${candidate.papers || '未提供'}
+兴趣爱好：${candidate.hobbies || '未提供'}
+自我评价：${candidate.selfEval || '未提供'}
+
+【任务】
+1. 用1-2句话总结简历亮点。
+2. 用1-2句话指出简历疑点或漏洞。
+3. 针对每个考察维度生成3个高质量个性化问题，利用全部简历信息。
+4. 每个问题带3个多样化追问方向（避免雷同标签）。
+5. 严格输出JSON，无其他文字：
+{
+  "highlights": "...",
+  "concerns": "...",
+  "questions": [
+    {
+      "dimension": "维度名",
+      "items": [
+        {
+          "question": "...",
+          "followUps": ["...", "...", "..."]
+        }
+      ]
+    }
+  ]
+}`;
+
+            generateAndSaveBtn.disabled = true;
+            generateAndSaveBtn.textContent = '⏳ 生成中...';
+            try {
+                const resp = await fetch(API_CONFIG.baseURL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_CONFIG.apiKey}` },
+                    body: JSON.stringify({
+                        model: API_CONFIG.model,
+                        messages: [
+                            { role: 'system', content: '你是专业面试官，输出合法JSON。' },
+                            { role: 'user', content: prompt }
+                        ],
+                        temperature: 0.7, max_tokens: 2000
+                    })
+                });
+                if (!resp.ok) throw new Error('API请求失败：' + resp.status);
+                const data = await resp.json();
+                let content = data.choices[0].message.content;
+                let clean = content.trim();
+                const m = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (m) clean = m[1];
+                else { const a = clean.indexOf('{'), b = clean.lastIndexOf('}'); if (a!==-1 && b!==-1) clean = clean.substring(a, b+1); }
+                const result = JSON.parse(clean);
+
+                const savedCandidate = {
+                    ...candidate,
+                    highlights: result.highlights,
+                    concerns: result.concerns,
+                    questions: result.questions,
+                    timestamp: new Date().toISOString()
+                };
+
+                const editIdx = generateAndSaveBtn.dataset.editIdx;
+                if (editIdx !== undefined && editIdx !== '') {
+                    candidates[editIdx] = savedCandidate;
+                    delete generateAndSaveBtn.dataset.editIdx;
+                } else {
+                    candidates.push(savedCandidate);
+                }
+                localStorage.setItem('candidatesList', JSON.stringify(candidates));
+                renderCandidateList();
+                clearForm();
+                alert('✅ 面试问题已生成并保存');
+            } catch (e) {
+                alert('生成失败：' + e.message);
+                console.error(e);
+            } finally {
+                generateAndSaveBtn.disabled = false;
+                generateAndSaveBtn.textContent = '✨ 生成面试问题并保存';
+            }
+        });
+
+        function clearForm() {
+            Object.values(fields).forEach(f => f.value = '');
+            jobSelect.value = '';
+            jobTitleInput.value = '';
+            dimensionInputs.forEach(inp => inp.value = '');
+            delete generateAndSaveBtn.dataset.editIdx;
+            generateAndSaveBtn.textContent = '✨ 生成面试问题并保存';
+        }
+
+        clearFormBtn.addEventListener('click', clearForm);
+
+        // ---------- 打开专家视图 ----------
+        openExpertViewBtn.addEventListener('click', () => {
+            window.open('expert-view.html', '_blank');
+        });
+
+        // 初始化
+        refreshJobSelect();
+        renderCandidateList();
+    </script>
+</body>
+</html>

@@ -93,7 +93,7 @@
         </div>
     </div>
 
-    <script src="config.js"></script>
+
     <script>
         // ---------- 数据存储 ----------
         let jobList = JSON.parse(localStorage.getItem('jobList') || '[]');
@@ -283,7 +283,7 @@
             generateAndSaveBtn.disabled = true;
             generateAndSaveBtn.textContent = '⏳ 生成中...';
             try {
-                const resp = await fetch('/api/ai-proxy', {
+                const resp = await fetch('/.netlify/functions/ai-proxy', {
     method: 'POST',
     body: JSON.stringify({ prompt })
 });

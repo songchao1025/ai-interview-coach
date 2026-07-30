@@ -2,5 +2,6 @@
   node_bundler = "esbuild"
   external_node_modules = ["node-fetch"]
 
+# 为 ai-proxy 函数单独设置超时 30 秒（免费版最大）
 [functions.ai-proxy]
   timeout = 30

@@ -38,24 +38,30 @@
 <body>
     <div class="container" id="app"></div>
 
-
     <script>
+        // 👇 替换成你自己的 Vercel 函数地址
+        const VERCEL_PROXY_URL = 'https://https://ai-proxy-server-i86n.vercel.app/api/ai-proxy';
+
         (function() {
             const app = document.getElementById('app');
             let candidates = [];
+            let currentCandidate = null;
 
-            // 加载候选人列表
-            function loadCandidates() {
-                const stored = localStorage.getItem('candidatesList');
-                if (stored) {
-                    try { candidates = JSON.parse(stored); } catch(e) { candidates = []; }
+            // 加载 interview-data.json
+            async function loadCandidates() {
+                try {
+                    const resp = await fetch('interview-data.json');
+                    if (!resp.ok) throw new Error('数据文件未找到');
+                    candidates = await resp.json();
+                    renderList();
+                } catch (e) {
+                    app.innerHTML = '<div class="no-data">📭 暂无面试安排，请联系HR准备。</div>';
                 }
             }
 
-            // 渲染候选人列表页
             function renderList() {
                 if (candidates.length === 0) {
-                    app.innerHTML = '<div class="no-data">📭 暂无面试安排，请联系HR准备。</div>';
+                    app.innerHTML = '<div class="no-data">📭 暂无面试安排。</div>';
                     return;
                 }
                 let html = '<h2 style="color:#1a73e8; margin-top:0;">📋 候选人列表</h2>';
@@ -75,9 +81,9 @@
                 });
             }
 
-            // 渲染单个候选人详情
             function showCandidateDetail(index) {
                 const c = candidates[index];
+                currentCandidate = c;
                 let html = `
                     <button class="back-btn" id="backBtn">← 返回列表</button>
                     <div class="header-card">
@@ -120,7 +126,7 @@
                 <div class="custom-section">
                     <h3>💡 专家自主追问</h3>
                     <p style="font-size:0.85em; color:#666;">基于候选人简历的即时提问</p>
-                    <div class="tag-cloud">
+                    <div class="tag-cloud" id="tagCloud">
                         <button class="tag-btn" data-tag="抗压能力">抗压能力</button>
                         <button class="tag-btn" data-tag="学习能力">学习能力</button>
                         <button class="tag-btn" data-tag="领导力">领导力</button>
@@ -137,11 +143,10 @@
                 `;
 
                 app.innerHTML = html;
-                bindDetailEvents(c, index);
+                bindDetailEvents(c);
             }
 
-            function bindDetailEvents(candidate, index) {
-                // 返回列表
+            function bindDetailEvents(candidate) {
                 document.getElementById('backBtn').addEventListener('click', renderList);
 
                 // 折叠维度
@@ -160,14 +165,13 @@
                     });
                 });
 
-                // 追问按钮
+                // 预置追问按钮
                 const followTexts = {
                     '追问技术细节': '能更深入解释技术/算法吗？',
                     '追问团队协作': '你在团队中的具体角色？如何分工？',
                     '追问失败处理': '过程中最大的挫折？如何调整？',
                     '追问细节': '当时的情境、任务、行动、结果？',
                     '追问思考过程': '决策依据是什么？还有哪些选项？',
-                    '追问量化结果': '可量化的成果？比如效率提升？',
                 };
                 document.querySelectorAll('.followup-btn').forEach(btn => {
                     btn.addEventListener('click', function() {
@@ -185,12 +189,15 @@
                 const firstHeader = document.querySelector('.dimension-header');
                 if (firstHeader) firstHeader.click();
 
-                // 自主追问AI调用
+                // ========== 实时AI自主追问 ==========
                 const customResult = document.getElementById('customResult');
-                async function fetchCustom(dimension) {
-                    customResult.style.display = 'block';
-                    customResult.innerHTML = '⏳ 生成中...';
-                    const info = `
+                const customTagInput = document.getElementById('customTagInput');
+                const customTagBtn = document.getElementById('customTagBtn');
+                const tagCloud = document.getElementById('tagCloud');
+
+                // 构建候选人信息摘要（用于发送给AI）
+                function buildCandidateInfo() {
+                    return `
 姓名：${candidate.name}，岗位：${candidate.jobTitle}
 工作年限：${candidate.workYears || '未知'}
 技能：${candidate.skills || '未知'}
@@ -201,46 +208,61 @@
 论文专利：${candidate.papers || '未知'}
 兴趣爱好：${candidate.hobbies || '未知'}
 自我评价：${candidate.selfEval || '未知'}`;
+                }
+
+                async function fetchCustomQuestions(dimension) {
+                    customResult.style.display = 'block';
+                    customResult.innerHTML = '⏳ 正在生成...';
+
+                    const info = buildCandidateInfo();
+                    const prompt = `候选人信息：\n${info}\n\n请针对“${dimension}”这个维度，生成2-3个高质量的面试问题，每个问题带2-3个追问方向。输出JSON格式：{"questions":[{"question":"...","followUps":["..."]}]}`;
+
                     try {
-                        const resp = await fetch('/.netlify/functions/ai-proxy', {
-    method: 'POST',
-    body: JSON.stringify({ prompt })
-});
+                        const resp = await fetch(VERCEL_PROXY_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt })
+                        });
+                        if (!resp.ok) throw new Error('AI 请求失败');
                         const data = await resp.json();
+                        // 解析AI返回的文本内容
                         let content = data.choices[0].message.content;
                         let clean = content.trim();
                         const m = clean.match(/```json\s*([\s\S]*?)\s*```/) || clean.match(/```\s*([\s\S]*?)\s*```/);
                         if (m) clean = m[1];
                         else { const a=clean.indexOf('{'), b=clean.lastIndexOf('}'); if(a!==-1) clean=clean.substring(a,b+1); }
                         const result = JSON.parse(clean);
+
                         let html = `<h4>考察维度：${dimension}</h4>`;
-                        result.questions.forEach((q,i) => {
+                        result.questions.forEach((q, i) => {
                             html += `<p><strong>Q${i+1}:</strong> ${q.question}<br><small>追问：${q.followUps.join('、')}</small></p>`;
                         });
                         customResult.innerHTML = html;
-                    } catch(e) {
-                        customResult.innerHTML = '❌ 生成失败';
+                    } catch (e) {
+                        customResult.innerHTML = '❌ 生成失败，请重试';
                         console.error(e);
                     }
                 }
 
-                document.querySelectorAll('.tag-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
+                // 预设标签点击
+                tagCloud.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('tag-btn')) {
                         document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
-                        this.classList.add('active');
-                        fetchCustom(this.dataset.tag);
-                    });
+                        e.target.classList.add('active');
+                        fetchCustomQuestions(e.target.dataset.tag);
+                    }
                 });
-                document.getElementById('customTagBtn').addEventListener('click', () => {
-                    const val = document.getElementById('customTagInput').value.trim();
-                    if (!val) return alert('请输入维度');
-                    fetchCustom(val);
+
+                // 自定义输入按钮
+                customTagBtn.addEventListener('click', function() {
+                    const val = customTagInput.value.trim();
+                    if (!val) { alert('请输入维度'); return; }
+                    fetchCustomQuestions(val);
                 });
             }
 
             // 启动
             loadCandidates();
-            renderList();
         })();
     </script>
 </body>
